@@ -1,10 +1,18 @@
 package com.example.demo;
 
 
+
+
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
+
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 //http://localhost:8080/params/query/EmployeeDetailsById?id=0
@@ -50,6 +58,8 @@ public class Query {
                 eTarget = employeeList.get(i);
             }
         }
+
+
 
         if(eTarget!=null){
             ArrayList<String> checkInOut = eTarget.getCheckInOut();
@@ -171,19 +181,12 @@ public class Query {
     @RequestMapping(value="/query/EnterEmployee", method=RequestMethod.POST )
     public void EnterEmployee(@RequestBody  Employee employee) {
 
-        DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
-        Date date = new Date();
-
-        String []sDate = dateFormat.format(date).split(" ");
-
-        String year = sDate[0].split("/")[0];
-        String month =  sDate[0].split("/")[1];
-        String day = sDate[0].split("/")[2];
+        LocalDate now = LocalDate.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
         Employee e = new Employee(employeeList.size()+"",employee.getName(),employee.getAge(),employee.getGender(),
-                day+"/"+month+"/"+year ,"/",0,new ArrayList<String>(),
+                now.format(formatter),"/",0,new ArrayList<String>(),
                 20000,employee.getJobPosition(),0,employee.getAssignedHoursADay());
-
         employeeList.add(e);
     }
 
@@ -340,11 +343,26 @@ public class Query {
             }
         }
         if(eTarget!=null){
-            eTarget.getCheckInOut().add(checkInOut.split("-")[0]);
-            eTarget.getCheckInOut().add(checkInOut.split("-")[1]);
+            String checkIn = checkInOut.split("-")[0];//10:00/25/04/2018
+            String checkOut = checkInOut.split("-")[1];//16:00/25/04/2018
 
-            this.EmployeeTimeSpentWorkingById(eTarget.getId());
-            return "Successfully added checkInOut to employee with id: "+id;
+            //to print LocalDateTime checkOutL.format(formatter).toString() ->10:00/25/04/2018
+            // with formatter  DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm/dd/MM/yyyy");
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm/dd/MM/yyyy");
+            LocalDateTime checkInL = LocalDateTime.parse(checkIn,formatter);
+            LocalDateTime checkOutL = LocalDateTime.parse(checkOut,formatter);
+
+            if(checkInL.isBefore(checkOutL)){
+                eTarget.getCheckInOut().add(checkIn);
+                eTarget.getCheckInOut().add(checkOut);
+
+                this.EmployeeTimeSpentWorkingById(eTarget.getId());
+                return "Successfully added \ncheckIn "+checkInL.format(formatter).toString()+
+                        "\ncheckOut "+checkOutL.format(formatter).toString()+
+                        "\nto employee with id: "+id;
+            }else{
+                return "invalid checkInOut";
+            }
         }else{
             return "Employee with id: "+id+" not found";
         }
@@ -364,74 +382,32 @@ public class Query {
         StringBuilder sb = new StringBuilder("");
         if(eTarget!=null){
             for(int i=0;i<eTarget.getCheckInOut().size();i=i+2){
-                String arrived = eTarget.getCheckInOut().get(i);
-                String date = "";
-                String left = eTarget.getCheckInOut().get(i+1);
-                int hours=0,minutes=0;
-                //arrived -> "10:00/02/01/2018";
-                //left -> "13:40/02/01/2018";
-                date = arrived.split("/")[1]+"/"+arrived.split("/")[2]+"/"+arrived.split("/")[3];
+                String checkIn = eTarget.getCheckInOut().get(i);//10:00/25/04/2018
+                String checkOut = eTarget.getCheckInOut().get(i+1);//16:00/25/04/2018
+                long totalHours=0,totalMinutes=0;
 
-                arrived = arrived.split("/")[0]; //10:00
-                left = left.split("/")[0]; // 13:40
+                //to print LocalDateTime checkOutL.format(formatter).toString() ->10:00/25/04/2018
+                // with formatter  DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm/dd/MM/yyyy");
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm/dd/MM/yyyy");
+                LocalDateTime checkInL = LocalDateTime.parse(checkIn,formatter);
+                LocalDateTime checkOutL = LocalDateTime.parse(checkOut,formatter);
 
-                String arrivedH = arrived.split(":")[0]; //10
-                String arrivedM = arrived.split(":")[1]; //00
+                LocalTime initialTime = checkInL.toLocalTime();
+                LocalTime finalTime = checkOutL.toLocalTime();
 
-                String leftH = left.split(":")[0];//13
-                String leftM = left.split(":")[1];//40
+                totalHours = ChronoUnit.MINUTES.between(initialTime, finalTime)/60;
+                totalMinutes = ChronoUnit.MINUTES.between(initialTime, finalTime)%60;
 
-                if(Integer.parseInt(arrivedH)<Integer.parseInt(leftH)){
-                    //arrived -> "10:20/02/01/2018";
-                    //left -> "13:40/02/01/2018";
-                    if(Integer.parseInt(arrivedM)<Integer.parseInt(leftM)){
-                        //arrived -> "10:20/02/01/2018";
-                        //left -> "13:40/02/01/2018";
-                        hours=Integer.parseInt(leftH)-Integer.parseInt(arrivedH);
-                        minutes=Integer.parseInt(leftM)-Integer.parseInt(arrivedM);
-                    }
-                    else if(Integer.parseInt(arrivedM)>Integer.parseInt(leftM)){
-                        //arrived -> "10:30/02/01/2018";
-                        //left ->    "13:10/02/01/2018";
-                        hours = Integer.parseInt(leftH)-Integer.parseInt(arrivedH)-1;
-                        minutes = 60-Integer.parseInt(arrivedM)+Integer.parseInt(leftM);
-                    }else{
-                         //arrived -> "10:10/02/01/2018";
-                         //left ->    "13:10/02/01/2018";
-                        hours = Integer.parseInt(leftH)-Integer.parseInt(arrivedH);
-                        minutes = 0;
-                    }
-                }else if(Integer.parseInt(arrivedH)==Integer.parseInt(leftH)){
-                    //arrived -> "10:00/02/01/2018";
-                    //left -> "10:40/02/01/2018";
-                    if(Integer.parseInt(arrivedM)<Integer.parseInt(leftM)){
-                        //arrived -> "10:20/02/01/2018";
-                        //left -> "10:40/02/01/2018";
-                        hours=0;
-                        minutes=Integer.parseInt(leftM)-Integer.parseInt(arrivedM);
-                    }
-                    else if(Integer.parseInt(arrivedM)>Integer.parseInt(leftM)){
-                        //ne e mozno scenariovo
-                        //arrived -> "10:30/02/01/2018";
-                        //left ->    "10:10/02/01/2018";
-                        hours = -1;
-                        minutes = -1;
-                    }else{
-                        //arrived -> "10:10/02/01/2018";
-                        //left ->    "10:10/02/01/2018";
-                        hours = 0;
-                        minutes = 0;
-                    }
-                }
-                if(hours*60+minutes>=eTarget.getAssignedHoursADay()*60){
-                    sb.append( "Obraboteni se dodelenite casovi za den "+date+"\n");
+                if(totalHours>=eTarget.getAssignedHoursADay()){
+                    sb.append( "Obraboteni se dodelenite casovi za den "+checkInL.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))+"\n");
                 }else{
-                    sb.append( "Ne se obraboteni "+eTarget.getAssignedHoursADay()+" na den "+date);
-                    int remainingMinutes = (eTarget.getAssignedHoursADay()*60)-(hours*60)-minutes;
-                    sb.append( "Vi ostanuvaat uste "+remainingMinutes/60+"h "+remainingMinutes%60+"m"+"\n");
+                    sb.append( "Ne se obraboteni "+eTarget.getAssignedHoursADay()+"h na den "+checkInL.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+                    long remainingMinutes = (eTarget.getAssignedHoursADay()*60)-(totalHours*60)-totalMinutes;
+                    sb.append( " Vi ostanuvaat uste "+remainingMinutes/60+"h "+remainingMinutes%60+"m"+"\n");
                 }
             }
             return sb.toString();
+
         }else{
              return "Employee with id: "+id+" not found";
         }
