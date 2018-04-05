@@ -39,18 +39,19 @@ public class Query {
             }
         }
         if(eTarget!=null){
-            this.EmployeeTimeSpentWorkingById(eTarget.getId());
+            this.EmployeeTotalTimeSpentWorkingInCompanyById(eTarget.getId());
             return eTarget;
         }else{
-            return new Employee("/", "/", "/", "/", "/", "/",
-            0, new ArrayList<String>(), 0,"/",0,0);
+            return new Employee("/", "/","/", "/", "/",
+            0, 0, "/",
+            0, 0);
         }
     }
 
 
-    @RequestMapping(value="/query/EmployeeTimeSpentWorkingById", method=RequestMethod.GET)
+    @RequestMapping(value="/query/EmployeeTotalTimeSpentWorkingInCompanyById", method=RequestMethod.GET)
     @ResponseBody
-    public String EmployeeTimeSpentWorkingById(@RequestParam(name="id", required=false, defaultValue="defId") String id) {
+    public String EmployeeTotalTimeSpentWorkingInCompanyById(@RequestParam(name="id", required=false, defaultValue="defId") String id) {
         Employee eTarget=null;
         for(int i=0;i<employeeList.size();i++){
             Employee e = employeeList.get(i);
@@ -59,43 +60,29 @@ public class Query {
             }
         }
 
-
-
         if(eTarget!=null){
             ArrayList<String> checkInOut = eTarget.getCheckInOut();
             eTarget.setMinutesWorked(0);
+            long totalMinutes=0;
 
             for(int i=0;i<checkInOut.size();i+=2){
-                int checkInMinutes = Integer.parseInt(checkInOut.get(i).split("/")[0].split(":")[1]);
-                int checkInHour = Integer.parseInt(checkInOut.get(i).split("/")[0].split(":")[0]);
+                String checkIn = eTarget.getCheckInOut().get(i);//10:00/25/04/2018
+                String checkOut = eTarget.getCheckInOut().get(i+1);//16:00/25/04/2018
 
-                int checkOutMinutes = Integer.parseInt(checkInOut.get(i+1).split("/")[0].split(":")[1]);
-                int checkOutHour = Integer.parseInt( checkInOut.get(i+1).split("/")[0].split(":")[0]);
+                //to print LocalDateTime checkOutL.format(formatter).toString() ->10:00/25/04/2018
+                // with formatter  DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm/dd/MM/yyyy");
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm/dd/MM/yyyy");
+                LocalDateTime checkInL = LocalDateTime.parse(checkIn,formatter);
+                LocalDateTime checkOutL = LocalDateTime.parse(checkOut,formatter);
 
-                if(checkInMinutes<checkOutMinutes){
-                    //checkInOut.add("08:23/25/03/2017");
-                    //checkInOut.add("16:46/25/03/2017");
-                    int dif = checkOutMinutes - checkInMinutes;
-                    dif+=(checkOutHour-checkInHour)*60;
-                    eTarget.setMinutesWorked(eTarget.getMinutesWorked()+dif);
+                LocalTime initialTime = checkInL.toLocalTime();
+                LocalTime finalTime = checkOutL.toLocalTime();
 
-                }else if(checkInMinutes>checkOutMinutes){
-                    //checkInOut.add("08:30/25/03/2017");
-                    //checkInOut.add("09:10/25/03/2017");
-                    int dif = checkOutHour - checkInHour;
-                    dif=dif*60;
-                    dif=dif-checkInMinutes+checkOutMinutes;
-                    eTarget.setMinutesWorked(eTarget.getMinutesWorked()+dif);
-                }else{
-                    //checkInOut.add("08:00/25/03/2017");
-                    //checkInOut.add("15:00/25/03/2017");
-                    int dif = checkOutHour - checkInHour;
-                    dif = dif *60;
-                    eTarget.setMinutesWorked(eTarget.getMinutesWorked()+dif);
-                }
+                totalMinutes += ChronoUnit.MINUTES.between(initialTime, finalTime);
             }
+            eTarget.setMinutesWorked(totalMinutes);
 
-            return "Time spent working: "+eTarget.getMinutesWorked()/60 +"h "+eTarget.getMinutesWorked()%60+"m";
+            return "Total time spent working in company: "+totalMinutes/60+"h "+totalMinutes%60+"m";
         }
         else return "Employee with ID: "+id+" not found";
     }
@@ -105,7 +92,7 @@ public class Query {
     @ResponseBody
     public  ArrayList<Employee> AllEmployees() {
        for(int i=0;i<employeeList.size();i++){
-           this.EmployeeTimeSpentWorkingById(i+"");
+           this.EmployeeTotalTimeSpentWorkingInCompanyById(i+"");
        }
        return employeeList;
     }
@@ -131,7 +118,7 @@ public class Query {
     @RequestMapping(value="/query/TotalEmployees", method=RequestMethod.GET)
     @ResponseBody
     public String TotalEmployees() {
-        return "Total employees= "+employeeList.size();
+        return "TotalEmployees= "+employeeList.size();
     }
 
 
@@ -145,18 +132,8 @@ public class Query {
     @RequestMapping(value="/query/revenuePerEmployee", method=RequestMethod.GET)
     @ResponseBody
     public  String  revenuePerEmployee() {
-        ArrayList<Application> apps = new ArrayList<Application>();
+        ArrayList<Application> apps = this.AllApplications();
 
-
-        for(int i=0;i<employeeList.size();i++){
-            Employee e = employeeList.get(i);
-            ArrayList<Application> eApps= e.getApplications();
-            for(int j=0;j<eApps.size();j++){
-                if(apps.contains(eApps.get(j))==false){
-                    apps.add(eApps.get(j));
-                }
-            }
-        }
         StringBuilder sb = new StringBuilder("");
         for(int i=0;i<apps.size();i++){
             int numOfDevelopers=0;
@@ -169,10 +146,10 @@ public class Query {
                 }
             }
 
-            sb.append("App name: "+apps.get(i).getName()+" Profit: " + apps.get(i).getProfit() +"Num of developers: "+numOfDevelopers
-            +"Revenue per employee"+apps.get(i).getProfit()/numOfDevelopers);
+            sb.append("App name: "+apps.get(i).getName()+" Profit: " + apps.get(i).getProfit() +" Num of developers: "+numOfDevelopers
+            +" Revenue per employee "+apps.get(i).getProfit()/numOfDevelopers);
 
-            sb.append("<br>");
+            sb.append("\n");
         }
         return sb.toString();
     }
@@ -180,13 +157,12 @@ public class Query {
 
     @RequestMapping(value="/query/EnterEmployee", method=RequestMethod.POST )
     public void EnterEmployee(@RequestBody  Employee employee) {
-
         LocalDate now = LocalDate.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-        Employee e = new Employee(employeeList.size()+"",employee.getName(),employee.getAge(),employee.getGender(),
-                now.format(formatter),"/",0,new ArrayList<String>(),
-                20000,employee.getJobPosition(),0,employee.getAssignedHoursADay());
+        Employee e = new Employee(employeeList.size()+"",employee.getName(),employee.getAge(),
+                employee.getGender(), now.format(formatter),0, employee.getSalary(),
+                employee.getJobPosition(),0,employee.getAssignedHoursADay());
         employeeList.add(e);
     }
 
@@ -194,24 +170,16 @@ public class Query {
     @RequestMapping(value="/query/RemoveEmployeeById", method=RequestMethod.DELETE)
     @ResponseBody
     public String RemoveEmployeeById(@RequestParam(name="id", required=true, defaultValue="defName") String id) {
-
         Employee eTarget=null;
         for(int i=0;i<employeeList.size();i++){
             Employee e = employeeList.get(i);
             if(e.getId().equals(id)){
-                eTarget = employeeList.get(i);
+                employeeList.remove(e);
+                turnOvers++;
+                return "Successfully removed employee with id: "+id;
             }
         }
-
-        if(eTarget!=null){
-            employeeList.remove(Integer.parseInt(id));
-            turnOvers++;
-            return "Successfully removed employee with id: "+id;
-        }else{
-            return "Employee with id: "+id+" not found";
-        }
-
-
+        return "Employee with id: "+id+" not found";
     }
 
 
@@ -230,9 +198,9 @@ public class Query {
 
         try{
             if(eTarget!=null){
-
+                double tmp = eTarget.getRatingPerformance();
                 eTarget.setRatingPerformance(eTarget.getRatingPerformance()+Double.parseDouble(changeBy));
-                return "RatingPerformance for employee with id "+id+" changed to "+eTarget.getRatingPerformance();
+                return "RatingPerformance for employee with id "+id+" changed from "+tmp+" to "+eTarget.getRatingPerformance();
             }
             else{
                 return "Employee with ID: "+id+" not found";
@@ -240,14 +208,13 @@ public class Query {
         }catch (Exception e){
             return "invalid value for changeBy!";
         }
-
     }
 
 
-    @RequestMapping(value="/query/IncreaseSalaryById", method=RequestMethod.PUT)
+    @RequestMapping(value="/query/ChangeSalaryById", method=RequestMethod.PUT)
     @ResponseBody
-    public String IncreaseSalaryById(@RequestParam(name="id", required=true, defaultValue="defName") String id,
-                                     @RequestParam(name="increase", required=true, defaultValue="defName") String increase){
+    public String ChangeSalaryById(@RequestParam(name="id", required=true, defaultValue="defName") String id,
+                                     @RequestParam(name="change", required=true, defaultValue="defName") String change){
         Employee eTarget=null;
         for(int i=0;i<employeeList.size();i++){
             Employee e = employeeList.get(i);
@@ -259,45 +226,32 @@ public class Query {
         try{
             if(eTarget!=null){
                 int currSalary = eTarget.getSalary();
-                eTarget.setSalary(eTarget.getSalary()+Integer.parseInt(increase));
-                return "Salary for employee with id "+id+" increased from "+ currSalary+" to "+eTarget.getSalary();
+                eTarget.setSalary(eTarget.getSalary()+Integer.parseInt(change));
+                return "Salary for employee with id "+id+" change from "+ currSalary+" to "+eTarget.getSalary();
             }
             else{
                 return "Employee with ID: "+id+" not found";
             }
         }catch (Exception e){
-            return "invalid value for increase!";
+            return "invalid value for change!";
         }
-
-
     }
 
 
     @RequestMapping(value="/query/TotalProfit", method=RequestMethod.GET)
     @ResponseBody
     public String TotalProfit() {
-
-        ArrayList<Application> apps = new ArrayList<Application>();
+        ArrayList<Application> apps = this.AllApplications();
         int total=0;
-
-
-        for(int i=0;i<employeeList.size();i++){
-            Employee e = employeeList.get(i);
-            ArrayList<Application> eApps= e.getApplications();
-            for(int j=0;j<eApps.size();j++){
-                if(apps.contains(eApps.get(j))==false){
-                    apps.add(eApps.get(j));
-                    total+=eApps.get(j).getProfit();
-                }
-            }
-        }
         StringBuilder sb = new StringBuilder("");
 
-        for(int k=0;k<apps.size();k++){
-            sb.append(apps.get(k).getName()+" "+apps.get(k).getProfit()+"<br>");
+        for(int i=0;i<apps.size();i++){
+          Application a = apps.get(i);
+          total+=a.getProfit();
+          sb.append(apps.get(i).getName()+" "+apps.get(i).getProfit()+"\n");
         }
 
-        return sb.toString()+" "+"TOTAL PROFIT: "+total;
+        return sb.toString()+"TOTAL PROFIT: "+total;
     }
 
 
@@ -314,10 +268,10 @@ public class Query {
         }
 
         if(eTarget!=null){
-
             if(jobPosition.equals("employee") || jobPosition.equals("manager") || jobPosition.equals("director") ){
+                String tmp = eTarget.getJobPosition();
                 eTarget.setJobPosition(jobPosition);
-                return "Successfully changed job position to employee with id: "+id;
+                return "Successfully changed job position to employee with id: "+id +" from "+tmp+" to "+eTarget.getJobPosition();
             }
             else{
                 return "job position not valid.";
@@ -356,7 +310,7 @@ public class Query {
                 eTarget.getCheckInOut().add(checkIn);
                 eTarget.getCheckInOut().add(checkOut);
 
-                this.EmployeeTimeSpentWorkingById(eTarget.getId());
+                this.EmployeeTotalTimeSpentWorkingInCompanyById(eTarget.getId());
                 return "Successfully added \ncheckIn "+checkInL.format(formatter).toString()+
                         "\ncheckOut "+checkOutL.format(formatter).toString()+
                         "\nto employee with id: "+id;
@@ -413,62 +367,187 @@ public class Query {
         }
     }
 
+
+
+    @RequestMapping(value="/query/AgeStatistics", method=RequestMethod.GET)
+    @ResponseBody
+    public String AgeStatistics() {
+        ArrayList<Employee> allEmployees = this.AllEmployees();
+        StringBuilder sb = new StringBuilder("");
+        int age_20_29=0,age_30_39=0,age_40_49=0,age_50_59=0;
+        int under20=0,above59=0;
+
+
+        for(int i=0;i<allEmployees.size();i++){
+            Employee e = allEmployees.get(i);
+            int curAge = Integer.parseInt(e.getAge());
+
+            if(curAge<20)
+                under20++;
+            else if(curAge>=20 && curAge<=29)
+                age_20_29++;
+            else if(curAge>=30 && curAge<=39)
+                age_30_39++;
+            else if(curAge>=40 && curAge<=49)
+                age_40_49++;
+            else if(curAge>=50 && curAge<=59)
+                age_50_59++;
+            else if(curAge>=60)
+                above59++;
+        }
+        sb.append("under 20: "+under20+"\n");
+        sb.append("from 20 to 29: "+age_20_29+"\n");
+        sb.append("from 30 to 39: "+age_30_39+"\n");
+        sb.append("from 40 to 49: "+age_40_49+"\n");
+        sb.append("from 50 to 59: "+age_50_59+"\n");
+        sb.append("above 59: "+above59+"\n");
+
+        return sb.toString();
+    }
+
+    @RequestMapping(value="/query/GenderStatistics", method=RequestMethod.GET)
+    @ResponseBody
+    public String GenderStatistics() {
+        ArrayList<Employee> allEmployees = this.AllEmployees();
+        int males=0,females=0;
+        for(int i=0;i<allEmployees.size();i++){
+            Employee e = allEmployees.get(i);
+            if(e.getGender().equals("M"))
+                males++;
+            else if(e.getGender().equals("F"))
+                females++;
+        }
+        return "Males: "+males+"\nFemales: "+females;
+    }
+
+    @RequestMapping(value="/query/AverageTasksCompletedPerEmployeeStatistics", method=RequestMethod.GET)
+    @ResponseBody
+    public String AverageTasksCompletedPerEmployeeStatistics() {
+        ArrayList<Employee> allEmployees = this.AllEmployees();
+        int totalTaskCompleted=0;
+        for(int i=0;i<allEmployees.size();i++) {
+            Employee e = allEmployees.get(i);
+            totalTaskCompleted+=e.getTasksCompleted();
+        }
+        return "Average Tasks Completed Per Employee: "+totalTaskCompleted/allEmployees.size();
+    }
+
+
+    @RequestMapping(value="/query/AverageTimeSpentWorkingInCompanyPerEmployeeStatistics", method=RequestMethod.GET)
+    @ResponseBody
+    public String AverageTimeSpentWorkingInCompanyPerEmployeeStatistics() {
+        ArrayList<Employee> allEmployees = this.AllEmployees();
+        long totalMinutesWorked=0;
+        for(int i=0;i<allEmployees.size();i++) {
+            Employee e = allEmployees.get(i);
+            totalMinutesWorked+=e.getMinutesWorked();
+        }
+
+        totalMinutesWorked=totalMinutesWorked/allEmployees.size();
+        long hours = totalMinutesWorked/60;
+        long minutes= totalMinutesWorked%60;
+        return "Average Time Spent Working In Company Per Employee: "+hours+"h "+minutes+"m";
+    }
+
+    @RequestMapping(value="/query/AverageSalaryPerEmployeeStatistics", method=RequestMethod.GET)
+    @ResponseBody
+    public String AverageSalaryPerEmployeeStatistics() {
+        ArrayList<Employee> allEmployees = this.AllEmployees();
+        int totalSalary=0;
+        for(int i=0;i<allEmployees.size();i++) {
+            Employee e = allEmployees.get(i);
+            totalSalary+=e.getSalary();
+        }
+        return "Average Salary Per Employee: "+totalSalary/allEmployees.size();
+    }
+    @RequestMapping(value="/query/JobPositionStatistics", method=RequestMethod.GET)
+    @ResponseBody
+    public String JobPositionStatistics() {
+        ArrayList<Employee> allEmployees = this.AllEmployees();
+        int employee=0,manager=0,director=0;
+        StringBuilder sb = new StringBuilder("");
+        for(int i=0;i<allEmployees.size();i++) {
+            Employee e = allEmployees.get(i);
+            if(e.getJobPosition().equals("employee"))
+                employee++;
+            else if(e.getJobPosition().equals("manager"))
+                manager++;
+            else if(e.getJobPosition().equals("director"))
+                director++;
+        }
+        sb.append("Employees: "+employee+"\n");
+        sb.append("Managers: "+manager+"\n");
+        sb.append("Directors: "+director+"\n");
+
+        return sb.toString();
+    }
+    @RequestMapping(value="/query/AverageRatingPerformancePerEmployeeStatistics", method=RequestMethod.GET)
+    @ResponseBody
+    public String AverageRatingPerformancePerEmployeeStatistics() {
+        ArrayList<Employee> allEmployees = this.AllEmployees();
+        double totalRating=0;
+        StringBuilder sb = new StringBuilder("");
+        for(int i=0;i<allEmployees.size();i++) {
+            Employee e = allEmployees.get(i);
+            totalRating+=e.getRatingPerformance();
+        }
+        return "Average Rating Performance Per Employee: "+totalRating/allEmployees.size();
+    }
+
+    @RequestMapping(value="/query/AverageAssignedHoursADayPerEmployeeStatistics", method=RequestMethod.GET)
+    @ResponseBody
+    public String AverageAssignedHoursADayPerEmployeeStatistics() {
+        ArrayList<Employee> allEmployees = this.AllEmployees();
+        double totalAssignedHoursADay=0;
+        StringBuilder sb = new StringBuilder("");
+        for(int i=0;i<allEmployees.size();i++) {
+            Employee e = allEmployees.get(i);
+            totalAssignedHoursADay+=e.getAssignedHoursADay();
+        }
+        return "Average Assigned Hours A Day PerEmployee:  "+totalAssignedHoursADay/allEmployees.size();
+    }
+
+
+
+
+
     public void initEmployees(ArrayList<Employee> employeeList){
 
         Application angryBirds = new Application("angryBirds",340);
-
         Application viber = new Application("viber",520);
-
         Application twitter = new Application("twitter",600);
-
         Application instagram = new Application("instagram",320);
-
         Application facebook = new Application("facebook",890);
-
         Application snapchat = new Application("snapchat",130);
-
         Application whatsUp = new Application("whatsUp",220);
-
         Application youtube = new Application("youtube",660);
 
-        ArrayList<String> checkInOut = new ArrayList<String>();
-        checkInOut.add("08:20/25/03/2017");
-        checkInOut.add("16:00/25/03/2017");
 
-        checkInOut.add("08:00/26/03/2017");
-        checkInOut.add("16:00/26/03/2017");
+        Employee e1 = new Employee("0", "John", "22", "M", "24/03/2018",
+        20, 20000, "employee",
+        4.3, 8);
+        e1.getApplications().add(angryBirds);
+        e1.getApplications().add(viber);
+        e1.getCheckInOut().add("08:00/26/03/2017");
+        e1.getCheckInOut().add("16:00/26/03/2017");
 
-        Employee e1 = new Employee("0","User0","20","M",
-                    "25/03/2017","/",88,checkInOut,20000,"employee",
-                0,8);
-        e1.addApplication(angryBirds);
-        e1.addApplication(viber);
+        Employee e2 = new Employee("1", "Ana", "26", "F", "22/06/2018",
+                33, 24000, "manager",
+                7.3, 6);
+        e2.getApplications().add(facebook);
+        e2.getApplications().add(viber);
+        e2.getCheckInOut().add("08:00/26/03/2017");
+        e2.getCheckInOut().add("12:00/26/03/2017");
 
-        checkInOut = new ArrayList<String>();
-        checkInOut.add("10:00/01/01/2018");
-        checkInOut.add("15:00/01/01/2018");
-
-        checkInOut.add("10:00/02/01/2018");
-        checkInOut.add("13:40/02/01/2018");
-
-        Employee e2 = new Employee("1","User1","21","M",
-                                "01/01/2018","/",212,checkInOut,20000,"manager",
-                0,8);
-        e2.addApplication(twitter);
-        e2.addApplication(viber);
-
-
-        checkInOut = new ArrayList<String>();
-        checkInOut.add("08:50/25/03/2017");
-        checkInOut.add("09:20/25/03/2017");
-
-        checkInOut.add("08:20/26/03/2017");
-        checkInOut.add("09:20/26/03/2017");
-
-        Employee e3 = new Employee("2","User2","21","M",
-                "01/01/2018","/",212,checkInOut,20000,"director",
-                0,8);
-
+        Employee e3 = new Employee("2", "Mark", "33", "M", "12/09/2018",
+                4, 30000, "director",
+                10.3, 5);
+        e3.getApplications().add(facebook);
+        e3.getApplications().add(viber);
+        e3.getCheckInOut().add("08:00/26/03/2017");
+        e3.getCheckInOut().add("09:20/26/03/2017");
+        e3.getCheckInOut().add("10:20/27/03/2017");
+        e3.getCheckInOut().add("15:20/27/03/2017");
 
         employeeList.add(e1);
         employeeList.add(e2);
